@@ -413,5 +413,5 @@ app.get('/users', (req, res) => {
   });
 });
 
-// Export the app for Vercel
+// Export the app for Vercel (no app.listen for serverless)
 module.exports = app;
