@@ -10,109 +10,114 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-const db = new sqlite3.Database('./database.db', (err) => {
-  if (err) {
-    console.error('Database connection error:', err);
-    process.exit(1);
-  }
-  console.log('Connected to SQLite database');
-});
-
-// Ensure tables are created sequentially
-db.serialize(() => {
-  // Users table
-  db.run(
-    'CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, email TEXT UNIQUE, password TEXT, verified INTEGER DEFAULT 0, resetToken TEXT, resetTokenExpiry INTEGER)',
-    (err) => {
-      if (err) console.error('Error creating users table:', err);
-      else console.log('Users table created or already exists');
-    }
-  );
-
-  // Insert default user (email: test@example.com, password: test123)
-  db.get('SELECT email FROM users WHERE email = ?', ['test@example.com'], (err, row) => {
-    if (err) console.error('Error checking default user:', err);
-    if (!row) {
-      const hashedPassword = bcrypt.hashSync('test123', 10);
-      db.run(
-        'INSERT INTO users (email, password, verified) VALUES (?, ?, ?)',
-        ['test@example.com', hashedPassword, 1],
-        (err) => {
-          if (err) console.error('Error inserting default user:', err);
-          else console.log('Default user created: test@example.com');
-        }
-      );
+let db;
+try {
+  db = new sqlite3.Database('./database.db', (err) => {
+    if (err) {
+      console.error('Database connection error (expected on Vercel):', err);
+      // Continue without crashing
+    } else {
+      console.log('Connected to SQLite database');
     }
   });
+} catch (err) {
+  console.error('Failed to initialize database (expected on Vercel):', err);
+  db = null; // Set db to null to skip database operations
+}
 
-  // Properties table
-  db.run(
-    `CREATE TABLE IF NOT EXISTS properties (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      userId INTEGER,
-      title TEXT,
-      city TEXT,
-      type TEXT,
-      price REAL,
-      latitude REAL,
-      longitude REAL,
-      FOREIGN KEY (userId) REFERENCES users(id)
-    )`,
-    (err) => {
-      if (err) console.error('Error creating properties table:', err);
-      else console.log('Properties table created or already exists');
-    }
-  );
+// Database initialization (skipped if db is null)
+if (db) {
+  db.serialize(() => {
+    db.run(
+      'CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, email TEXT UNIQUE, password TEXT, verified INTEGER DEFAULT 0, resetToken TEXT, resetTokenExpiry INTEGER)',
+      (err) => {
+        if (err) console.error('Error creating users table:', err);
+        else console.log('Users table created or already exists');
+      }
+    );
 
-  // Interests table
-  db.run(
-    `CREATE TABLE IF NOT EXISTS interests (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      userId INTEGER,
-      propertyId INTEGER,
-      FOREIGN KEY (userId) REFERENCES users(id),
-      FOREIGN KEY (propertyId) REFERENCES properties(id)
-    )`,
-    (err) => {
-      if (err) console.error('Error creating interests table:', err);
-      else console.log('Interests table created or already exists');
-    }
-  );
+    db.get('SELECT email FROM users WHERE email = ?', ['test@example.com'], (err, row) => {
+      if (err) console.error('Error checking default user:', err);
+      if (!row) {
+        const hashedPassword = bcrypt.hashSync('test123', 10);
+        db.run(
+          'INSERT INTO users (email, password, verified) VALUES (?, ?, ?)',
+          ['test@example.com', hashedPassword, 1],
+          (err) => {
+            if (err) console.error('Error inserting default user:', err);
+            else console.log('Default user created: test@example.com');
+          }
+        );
+      }
+    });
 
-  // Messages table
-  db.run(
-    `CREATE TABLE IF NOT EXISTS messages (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      fromUserId INTEGER,
-      toUserId INTEGER,
-      content TEXT,
-      timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY (fromUserId) REFERENCES users(id),
-      FOREIGN KEY (toUserId) REFERENCES users(id)
-    )`,
-    (err) => {
-      if (err) console.error('Error creating messages table:', err);
-      else console.log('Messages table created or already exists');
-    }
-  );
+    db.run(
+      `CREATE TABLE IF NOT EXISTS properties (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        userId INTEGER,
+        title TEXT,
+        city TEXT,
+        type TEXT,
+        price REAL,
+        latitude REAL,
+        longitude REAL,
+        FOREIGN KEY (userId) REFERENCES users(id)
+      )`,
+      (err) => {
+        if (err) console.error('Error creating properties table:', err);
+        else console.log('Properties table created or already exists');
+      }
+    );
 
-  // Meetings table
-  db.run(
-    `CREATE TABLE IF NOT EXISTS meetings (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      userId INTEGER,
-      propertyId INTEGER,
-      date TEXT,
-      notes TEXT,
-      FOREIGN KEY (userId) REFERENCES users(id),
-      FOREIGN KEY (propertyId) REFERENCES properties(id)
-    )`,
-    (err) => {
-      if (err) console.error('Error creating meetings table:', err);
-      else console.log('Meetings table created or already exists');
-    }
-  );
-});
+    db.run(
+      `CREATE TABLE IF NOT EXISTS interests (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        userId INTEGER,
+        propertyId INTEGER,
+        FOREIGN KEY (userId) REFERENCES users(id),
+        FOREIGN KEY (propertyId) REFERENCES properties(id)
+      )`,
+      (err) => {
+        if (err) console.error('Error creating interests table:', err);
+        else console.log('Interests table created or already exists');
+      }
+    );
+
+    db.run(
+      `CREATE TABLE IF NOT EXISTS messages (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        fromUserId INTEGER,
+        toUserId INTEGER,
+        content TEXT,
+        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (fromUserId) REFERENCES users(id),
+        FOREIGN KEY (toUserId) REFERENCES users(id)
+      )`,
+      (err) => {
+        if (err) console.error('Error creating messages table:', err);
+        else console.log('Messages table created or already exists');
+      }
+    );
+
+    db.run(
+      `CREATE TABLE IF NOT EXISTS meetings (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        userId INTEGER,
+        propertyId INTEGER,
+        date TEXT,
+        notes TEXT,
+        FOREIGN KEY (userId) REFERENCES users(id),
+        FOREIGN KEY (propertyId) REFERENCES properties(id)
+      )`,
+      (err) => {
+        if (err) console.error('Error creating meetings table:', err);
+        else console.log('Meetings table created or already exists');
+      }
+    );
+  });
+} else {
+  console.warn('Skipping database initialization due to Vercel filesystem limitations');
+}
 
 const transporter = nodemailer.createTransport({
   service: 'gmail',
@@ -138,6 +143,9 @@ const authenticateToken = (req, res, next) => {
 // OTP Signup Routes
 app.post('/auth/send-signup-otp', async (req, res) => {
   const { email } = req.body;
+  if (!db) {
+    return res.status(503).json({ msg: 'Database unavailable on Vercel (use MySQL for production)' });
+  }
   const otp = Math.floor(100000 + Math.random() * 900000).toString();
   db.run('INSERT OR REPLACE INTO users (email, verified, password) VALUES (?, 0, ?)', [email, otp], (err) => {
     if (err) return res.status(500).json({ msg: 'Error storing OTP' });
@@ -160,6 +168,9 @@ app.post('/auth/send-signup-otp', async (req, res) => {
 });
 
 app.post('/auth/verify-otp', (req, res) => {
+  if (!db) {
+    return res.status(503).json({ msg: 'Database unavailable on Vercel (use MySQL for production)' });
+  }
   const { email, otp } = req.body;
   db.get('SELECT password FROM users WHERE email = ?', [email], (err, row) => {
     if (err || !row || row.password !== otp) return res.status(400).json({ msg: 'Invalid OTP' });
@@ -171,6 +182,9 @@ app.post('/auth/verify-otp', (req, res) => {
 });
 
 app.post('/auth/set-password', async (req, res) => {
+  if (!db) {
+    return res.status(503).json({ msg: 'Database unavailable on Vercel (use MySQL for production)' });
+  }
   const { email, password } = req.body;
   db.get('SELECT verified FROM users WHERE email = ?', [email], async (err, row) => {
     if (err || !row || !row.verified) return res.status(400).json({ msg: 'User not verified' });
@@ -184,6 +198,9 @@ app.post('/auth/set-password', async (req, res) => {
 
 // Login Route
 app.post('/auth/login', async (req, res) => {
+  if (!db) {
+    return res.status(503).json({ msg: 'Database unavailable on Vercel (use MySQL for production)' });
+  }
   const { email, password } = req.body;
   db.get('SELECT * FROM users WHERE email = ?', [email], async (err, user) => {
     if (err) return res.status(500).json({ msg: 'Server error' });
@@ -197,6 +214,9 @@ app.post('/auth/login', async (req, res) => {
 
 // Password Reset Routes
 app.post('/auth/forgot-password', async (req, res) => {
+  if (!db) {
+    return res.status(503).json({ msg: 'Database unavailable on Vercel (use MySQL for production)' });
+  }
   const { email } = req.body;
   db.get('SELECT id FROM users WHERE email = ?', [email], async (err, user) => {
     if (err || !user) return res.status(400).json({ msg: 'User not found' });
@@ -223,6 +243,9 @@ app.post('/auth/forgot-password', async (req, res) => {
 });
 
 app.post('/auth/reset-password', async (req, res) => {
+  if (!db) {
+    return res.status(503).json({ msg: 'Database unavailable on Vercel (use MySQL for production)' });
+  }
   const { email, password } = req.body;
   const hashedPassword = await bcrypt.hash(password, 10);
   db.run('UPDATE users SET password = ? WHERE email = ?', [hashedPassword, email], (err) => {
@@ -233,6 +256,9 @@ app.post('/auth/reset-password', async (req, res) => {
 
 // Profile Routes
 app.get('/users/profile', authenticateToken, (req, res) => {
+  if (!db) {
+    return res.status(503).json({ msg: 'Database unavailable on Vercel (use MySQL for production)' });
+  }
   db.get('SELECT email FROM users WHERE id = ?', [req.user.id], (err, user) => {
     if (err || !user) return res.status(400).json({ msg: 'User not found' });
     res.json(user);
@@ -263,6 +289,9 @@ app.post('/profile/send-details', authenticateToken, (req, res) => {
 
 // Properties Routes
 app.get('/properties', (req, res) => {
+  if (!db) {
+    return res.status(503).json({ msg: 'Database unavailable on Vercel (use MySQL for production)' });
+  }
   db.all('SELECT * FROM properties', [], (err, properties) => {
     if (err) {
       console.error('Error fetching properties:', err);
@@ -274,6 +303,9 @@ app.get('/properties', (req, res) => {
 });
 
 app.get('/properties/search', (req, res) => {
+  if (!db) {
+    return res.status(503).json({ msg: 'Database unavailable on Vercel (use MySQL for production)' });
+  }
   const { city, type, minPrice, maxPrice } = req.query;
   let query = 'SELECT * FROM properties WHERE 1=1';
   const params = [];
@@ -304,6 +336,9 @@ app.get('/properties/search', (req, res) => {
 });
 
 app.post('/properties', authenticateToken, (req, res) => {
+  if (!db) {
+    return res.status(503).json({ msg: 'Database unavailable on Vercel (use MySQL for production)' });
+  }
   const { title, city, type, price, latitude, longitude } = req.body;
   db.run(
     'INSERT INTO properties (userId, title, city, type, price, latitude, longitude) VALUES (?, ?, ?, ?, ?, ?, ?)',
@@ -319,6 +354,9 @@ app.post('/properties', authenticateToken, (req, res) => {
 });
 
 app.post('/properties/interest', authenticateToken, (req, res) => {
+  if (!db) {
+    return res.status(503).json({ msg: 'Database unavailable on Vercel (use MySQL for production)' });
+  }
   const { propertyId } = req.body;
   db.get('SELECT * FROM properties WHERE id = ?', [propertyId], (err, property) => {
     if (err) return res.status(500).json({ msg: 'Server error' });
@@ -346,6 +384,9 @@ app.post('/properties/interest', authenticateToken, (req, res) => {
 });
 
 app.get('/properties/interests', authenticateToken, (req, res) => {
+  if (!db) {
+    return res.status(503).json({ msg: 'Database unavailable on Vercel (use MySQL for production)' });
+  }
   db.all(
     'SELECT p.* FROM interests i JOIN properties p ON i.propertyId = p.id WHERE i.userId = ?',
     [req.user.id],
@@ -358,6 +399,9 @@ app.get('/properties/interests', authenticateToken, (req, res) => {
 
 // Messages Routes
 app.post('/messages', authenticateToken, (req, res) => {
+  if (!db) {
+    return res.status(503).json({ msg: 'Database unavailable on Vercel (use MySQL for production)' });
+  }
   const { toUserId, content } = req.body;
   db.run(
     'INSERT INTO messages (fromUserId, toUserId, content) VALUES (?, ?, ?)',
@@ -370,6 +414,9 @@ app.post('/messages', authenticateToken, (req, res) => {
 });
 
 app.get('/messages/:withUserId', authenticateToken, (req, res) => {
+  if (!db) {
+    return res.status(503).json({ msg: 'Database unavailable on Vercel (use MySQL for production)' });
+  }
   const { withUserId } = req.params;
   db.all(
     'SELECT * FROM messages WHERE (fromUserId = ? AND toUserId = ?) OR (fromUserId = ? AND toUserId = ?) ORDER BY timestamp',
@@ -383,6 +430,9 @@ app.get('/messages/:withUserId', authenticateToken, (req, res) => {
 
 // Meetings Routes
 app.post('/messages/meeting', authenticateToken, (req, res) => {
+  if (!db) {
+    return res.status(503).json({ msg: 'Database unavailable on Vercel (use MySQL for production)' });
+  }
   const { propertyId, date, notes } = req.body;
   db.run(
     'INSERT INTO meetings (userId, propertyId, date, notes) VALUES (?, ?, ?, ?)',
@@ -395,6 +445,9 @@ app.post('/messages/meeting', authenticateToken, (req, res) => {
 });
 
 app.get('/messages/meetings', authenticateToken, (req, res) => {
+  if (!db) {
+    return res.status(503).json({ msg: 'Database unavailable on Vercel (use MySQL for production)' });
+  }
   db.all(
     'SELECT m.*, p.title FROM meetings m JOIN properties p ON m.propertyId = p.id WHERE m.userId = ?',
     [req.user.id],
@@ -407,10 +460,18 @@ app.get('/messages/meetings', authenticateToken, (req, res) => {
 
 // Users Route
 app.get('/users', (req, res) => {
+  if (!db) {
+    return res.status(503).json({ msg: 'Database unavailable on Vercel (use MySQL for production)' });
+  }
   db.all('SELECT id, email FROM users', [], (err, users) => {
     if (err) return res.status(500).json({ msg: 'Error fetching users' });
     res.json(users);
   });
+});
+
+// Health check route to verify server is running
+app.get('/health', (req, res) => {
+  res.json({ status: 'Server running', database: db ? 'SQLite connected' : 'No database (Vercel limitation)' });
 });
 
 const PORT = process.env.PORT || 5000;
