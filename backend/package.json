@@ -13,10 +13,6 @@
     "jsonwebtoken": "^9.0.2",
     "nodemailer": "^6.9.14",
     "node-fetch": "^2.7.0",
-    "sqlite3": "^5.1.7",
-    "node-addon-api": "^8.2.0"
-  },
-  "engines": {
-    "node": "22.x"
+    "sqlite3": "^5.1.7"
   }
 }
